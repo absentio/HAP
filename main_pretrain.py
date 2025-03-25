@@ -12,7 +12,7 @@ from utils.network_utils import get_network
 from utils.data_utils import get_dataloader
 from utils.common_utils import PresetLRScheduler, makedirs
 
-from utils.compute_flops import print_model_param_flops, print_model_param_flops
+from utils.compute_flops import compute_model_param_flops
 
 import numpy as np
 
@@ -88,11 +88,11 @@ makedirs(log_dir)
 writer = SummaryWriter(log_dir)
 
 if args.dataset == 'tiny_imagenet':
-    total_flops, rotation_flops = print_model_param_flops(net, 64, cuda=True)
+    total_flops, rotation_flops = compute_model_param_flops(net, 64, cuda=True)
 elif args.dataset == 'imagenet':
-    total_flops, rotation_flops = print_model_param_flops(net, 224, cuda=True)
+    total_flops, rotation_flops = compute_model_param_flops(net, 224, cuda=True)
 else:
-    total_flops, rotation_flops = print_model_param_flops(net, 32, cuda=True)
+    total_flops, rotation_flops = compute_model_param_flops(net, 32, cuda=True)
 num_params = count_parameters(net)
 print(f"Total Flops: {total_flops}")
 print(f"Total Params: {num_params}")
