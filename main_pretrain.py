@@ -24,80 +24,6 @@ def count_parameters(model):
     """
     return sum(p.numel() for p in model.parameters())
 
-
-# fetch args
-parser = argparse.ArgumentParser()
-parser.add_argument('--learning_rate', default=0.1, type=float)
-parser.add_argument('--weight_decay', default=3e-3, type=float)
-parser.add_argument('--batch_size', default=128, type=int)
-parser.add_argument('--network', default='vgg', type=str)
-parser.add_argument('--depth', default=19, type=int)
-parser.add_argument('--dataset', default='cifar10', type=str)
-parser.add_argument('--epoch', default=150, type=int)
-parser.add_argument('--decay_every', default=60, type=int)
-parser.add_argument('--decay_ratio', default=0.1, type=float)
-parser.add_argument('--device', default='cuda', type=str)
-parser.add_argument('--resume', '-r', default=None, type=str)
-parser.add_argument('--load_path', default='', type=str)
-parser.add_argument('--log_dir', default='cifar10_result/pretrain', type=str)
-args = parser.parse_args()
-
-# init model
-net = get_network(network=args.network,
-                  depth=args.depth,
-                  dataset=args.dataset)
-print(net)
-# net = net.to(args.device)
-net = nn.DataParallel(net).to(args.device)
-
-# init dataloader
-dataset = 'imagenet_vgg' if args.dataset == 'imagenet' and args.network == 'vgg' else args.dataset
-trainloader, testloader = get_dataloader(dataset=dataset,
-                                         train_batch_size=args.batch_size,
-                                         test_batch_size=256)
-
-# init optimizer and lr scheduler
-optimizer = optim.SGD(net.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
-lr_schedule = {0: args.learning_rate,
-               int(args.epoch*0.5): args.learning_rate*0.1,
-               int(args.epoch*0.75): args.learning_rate*0.01}
-lr_scheduler = PresetLRScheduler(lr_schedule)
-# lr_scheduler = #StairCaseLRScheduler(0, args.decay_every, args.decay_ratio)
-
-# init criterion
-criterion = nn.CrossEntropyLoss()
-
-start_epoch = 0
-best_acc = 0
-if args.resume:
-    print('==> Resuming from checkpoint..')
-    # assert os.path.isdir('checkpoint/pretrain'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load(f'{args.resume}')
-    net.load_state_dict(checkpoint['net'])
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
-    print(args.dataset, args.network, args.depth)
-    print('==> Loaded checkpoint at epoch: %d, acc: %.2f%%' % (start_epoch, best_acc))
-    raise Exception('Test for Acc.')
-
-# init summary writter
-log_dir = os.path.join(args.log_dir, '%s_%s%s' % (args.dataset,
-                                                  args.network,
-                                                  args.depth))
-makedirs(log_dir)
-writer = SummaryWriter(log_dir)
-
-if args.dataset == 'tiny_imagenet':
-    total_flops, rotation_flops = compute_model_param_flops(net, 64, cuda=True)
-elif args.dataset == 'imagenet':
-    total_flops, rotation_flops = compute_model_param_flops(net, 224, cuda=True)
-else:
-    total_flops, rotation_flops = compute_model_param_flops(net, 32, cuda=True)
-num_params = count_parameters(net)
-print(f"Total Flops: {total_flops}")
-print(f"Total Params: {num_params}")
-
-
 def train(epoch):
     print('\nEpoch: %d' % epoch)
     net.train()
@@ -183,6 +109,79 @@ def test(epoch):
         best_acc = acc
 
 
-for epoch in range(start_epoch, args.epoch):
-    train(epoch)
-    test(epoch)
+if __name__ == '__main__': 
+    # fetch args
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--learning_rate', default=0.1, type=float)
+    parser.add_argument('--weight_decay', default=3e-3, type=float)
+    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--network', default='vgg', type=str)
+    parser.add_argument('--depth', default=19, type=int)
+    parser.add_argument('--dataset', default='cifar10', type=str)
+    parser.add_argument('--epoch', default=150, type=int)
+    parser.add_argument('--decay_every', default=60, type=int)
+    parser.add_argument('--decay_ratio', default=0.1, type=float)
+    parser.add_argument('--device', default='cuda', type=str)
+    parser.add_argument('--resume', '-r', default=None, type=str)
+    parser.add_argument('--load_path', default='', type=str)
+    parser.add_argument('--log_dir', default='cifar10_result/pretrain', type=str)
+    args = parser.parse_args()
+
+    # init model
+    net = get_network(network=args.network,
+                    depth=args.depth,
+                    dataset=args.dataset)
+    print(net)
+    # net = net.to(args.device)
+    net = nn.DataParallel(net).to(args.device)
+
+    # init dataloader
+    dataset = 'imagenet_vgg' if args.dataset == 'imagenet' and args.network == 'vgg' else args.dataset
+    trainloader, testloader = get_dataloader(dataset=dataset,
+                                            train_batch_size=args.batch_size,
+                                            test_batch_size=256)
+
+    # init optimizer and lr scheduler
+    optimizer = optim.SGD(net.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
+    lr_schedule = {0: args.learning_rate,
+                int(args.epoch*0.5): args.learning_rate*0.1,
+                int(args.epoch*0.75): args.learning_rate*0.01}
+    lr_scheduler = PresetLRScheduler(lr_schedule)
+    # lr_scheduler = #StairCaseLRScheduler(0, args.decay_every, args.decay_ratio)
+
+    # init criterion
+    criterion = nn.CrossEntropyLoss()
+
+    start_epoch = 0
+    best_acc = 0
+    if args.resume:
+        print('==> Resuming from checkpoint..')
+        # assert os.path.isdir('checkpoint/pretrain'), 'Error: no checkpoint directory found!'
+        checkpoint = torch.load(f'{args.resume}')
+        net.load_state_dict(checkpoint['net'])
+        best_acc = checkpoint['acc']
+        start_epoch = checkpoint['epoch']
+        print(args.dataset, args.network, args.depth)
+        print('==> Loaded checkpoint at epoch: %d, acc: %.2f%%' % (start_epoch, best_acc))
+        raise Exception('Test for Acc.')
+
+    # init summary writter
+    log_dir = os.path.join(args.log_dir, '%s_%s%s' % (args.dataset,
+                                                    args.network,
+                                                    args.depth))
+    makedirs(log_dir)
+    writer = SummaryWriter(log_dir)
+
+    if args.dataset == 'tiny_imagenet':
+        total_flops, rotation_flops = compute_model_param_flops(net, 64, cuda=True)
+    elif args.dataset == 'imagenet':
+        total_flops, rotation_flops = compute_model_param_flops(net, 224, cuda=True)
+    else:
+        total_flops, rotation_flops = compute_model_param_flops(net, 32, cuda=True)
+    num_params = count_parameters(net)
+    print(f"Total Flops: {total_flops}")
+    print(f"Total Params: {num_params}")
+    
+    for epoch in range(start_epoch, args.epoch):
+        train(epoch)
+        test(epoch)
