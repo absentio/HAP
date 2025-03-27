@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     # init dataloader
     dataset = 'imagenet_vgg' if args.dataset == 'imagenet' and args.network == 'vgg' else args.dataset
-    trainloader, testloader = get_dataloader(dataset=dataset,
+    trainloader, testloader = get_dataloader(dataset=dataset, num_workers= 8,
                                             train_batch_size=args.batch_size,
                                             test_batch_size=256)
 

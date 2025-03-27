@@ -12,6 +12,7 @@ running_time = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
 
 from models import VGG
 from pruner.hessian_pruner import HessianPruner
+from pathlib import Path
 
 from tensorboardX import SummaryWriter
 from utils.common_utils import (get_config_from_json,
@@ -60,7 +61,7 @@ def init_config():
 def init_dataloader(config):
     trainloader, testloader = get_dataloader(dataset=config.dataset,
                                              train_batch_size=config.batch_size,
-                                             test_batch_size=256, returnset=config.data_distributed)
+                                             test_batch_size=256, num_workers=config.num_workers, returnset=config.data_distributed)
     return trainloader, testloader
 
 
@@ -78,24 +79,22 @@ def init_network(config, logger, device, imagenet=True):
             bottleneck_net=BottleneckResNetImagenet
 
     else:
-        print('==> Loading checkpoint from %s.' % config.load_checkpoint)
-        logger.info('==> Loading checkpoint from %s.' % config.load_checkpoint)
-        checkpoint = torch.load(config.load_checkpoint)
-        if checkpoint.get('args', None) is not None:
-            args = checkpoint['args']
-            print('** [%s-%s%d] Acc: %.2f%%, Epoch: %d, Loss: %.4f' % (args.dataset, args.network, args.depth,
-                                                                   checkpoint['acc'], checkpoint['epoch'],
-                                                                   checkpoint['loss']))
-            logger.info('** [%s-%s%d] Acc: %.2f%%, Epoch: %d, Loss: %.4f' % (args.dataset, args.network, args.depth,
-                                                                         checkpoint['acc'], checkpoint['epoch'],
-                                                                         checkpoint['loss']))
-        state_dict = checkpoint['net'] if checkpoint.get('net', None) is not None else checkpoint['state_dict']
-        for key in list(state_dict.keys()):
-            if key.startswith('module'):
-                state_dict[key[7:]] = state_dict[key]
-                state_dict.pop(key)
-
-        net.load_state_dict(state_dict)
+        file_path = Path(config.load_checkpoint)
+        if file_path.exists():
+            print('==> Loading checkpoint from %s.' % config.load_checkpoint)
+            logger.info('==> Loading checkpoint from %s.' % config.load_checkpoint)
+            checkpoint = torch.load(config.load_checkpoint)
+            if checkpoint.get('args', None) is not None:
+                args = checkpoint['args']
+                print('** [%s-%s%d] Acc: %.2f%%, Epoch: %d, Loss: %.4f' % (args.dataset, args.network, args.depth, checkpoint['acc'], checkpoint['epoch'], checkpoint['loss']))
+                logger.info('** [%s-%s%d] Acc: %.2f%%, Epoch: %d, Loss: %.4f' % (args.dataset, args.network, args.depth, checkpoint['acc'], checkpoint['epoch'], checkpoint['loss']))
+                state_dict = checkpoint['net'] if checkpoint.get('net', None) is not None else checkpoint['state_dict']
+            for key in list(state_dict.keys()):
+                    if key.startswith('module'):
+                        state_dict[key[7:]] = state_dict[key]
+                        state_dict.pop(key)
+            net.load_state_dict(state_dict)
+       	
         bottleneck_net = get_bottleneck_builder(config.network)
 
     if config.data_distributed:
@@ -193,7 +192,7 @@ def main(config):
     stats = {}
     if config.data_distributed:
         torch.distributed.init_process_group(backend="nccl")
-    device = torch.device('cuda:0,1')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     criterion = torch.nn.CrossEntropyLoss()
 
     logger, writer = init_summary_writer(config)
@@ -221,7 +220,7 @@ def main(config):
         for data, label in hessianloader:
             hess_data = (data, label)
 
-    net, bottleneck_net = init_network(config, logger, device, config.dataset=="imagenet")
+    net, bottleneck_net = init_network(config, logger, device, (config.dataset == "imagenet"))
 
     pruner = init_pruner(net, bottleneck_net, config, writer, logger)
 
@@ -385,7 +384,7 @@ if __name__ == '__main__':
     parser.add_argument('--use-decompose', type=int, default=0)
     parser.add_argument('--nv', type=int, default=3)
     parser.add_argument('--local_rank', type=int, default=0, required=False)
-    parser.add_argument('--num_workers', type=int, default=32, required=False)
+    parser.add_argument('--num_workers', type=int, default=8, required=False)
     parser.add_argument("--data_distributed",type=int, default=0)
     parser.add_argument("--gpu",type=str, default="0,1")
     parser.add_argument("--init-test",type=int, default=0)
@@ -414,7 +413,7 @@ if __name__ == '__main__':
     config.fisher_type          = args.fisher_type
     config.fix_layers           = args.fix_layers
 
-    config.load_checkpoint      = "../../HAPresults/checkpoint/pretrain/"
+    config.load_checkpoint      = "../HAPresults/checkpoint/pretrain/"
     config.load_checkpoint      += f"{args.dataset}_{args.network}{args.depth}_best.t7"
     config.checkpoint           =  f"../HAPresults/{args.dataset}_result/{args.network}{args.depth}/"
     config.checkpoint           += f"pr_{args.ratio}_nir_{args.ni_ratio}/"
