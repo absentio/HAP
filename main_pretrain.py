@@ -105,7 +105,7 @@ def test(epoch):
             os.mkdirs(f'{args.log_dir}')
         # if not os.path.isdir('checkpoint/pretrain'):
             # os.mkdir('checkpoint/pretrain')
-        torch.save(state, f'{args.log_dir}/best.t7')
+        torch.save(state, f'{args.log_dir}/{args.dataset}_{args.network}{args.depth}_best.t7')
         best_acc = acc
 
 

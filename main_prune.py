@@ -66,6 +66,7 @@ def init_dataloader(config):
 
 
 def init_network(config, logger, device, imagenet=True):
+    bottleneck_net = None
     net = get_network(network=config.network,
                       depth=config.depth,
                       dataset=config.dataset)
@@ -77,6 +78,11 @@ def init_network(config, logger, device, imagenet=True):
             elif config.depth==50:
                 net = resnet50(pretrained=True)
             bottleneck_net=BottleneckResNetImagenet
+
+    elif config.network=="resnet" and config.depth==56:
+        print("INSIDE")
+        net = torch.hub.load("chenyaofo/pytorch-cifar-models", "cifar10_resnet56", pretrained=True)
+        #bottleneck_net = get_bottleneck_builder(config.network)
 
     else:
         file_path = Path(config.load_checkpoint)
@@ -94,8 +100,7 @@ def init_network(config, logger, device, imagenet=True):
                         state_dict[key[7:]] = state_dict[key]
                         state_dict.pop(key)
             net.load_state_dict(state_dict)
-       	
-        bottleneck_net = get_bottleneck_builder(config.network)
+            bottleneck_net = get_bottleneck_builder(config.network)
 
     if config.data_distributed:
         net = nn.parallel.DistributedDataParallel(net.cuda(), device_ids=[config.local_rank], output_device=config.local_rank)
@@ -189,6 +194,7 @@ def compute_ratio(model, total, fix_rotation, logger):
 
 
 def main(config):
+    torch.serialization.add_safe_globals('CifarResNet')
     stats = {}
     if config.data_distributed:
         torch.distributed.init_process_group(backend="nccl")
@@ -357,7 +363,7 @@ def main(config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='configs/imagenet_exps/hessian_trace.json', required=False)
+    parser.add_argument('--config', type=str, default='configs/exp_for_cifar/hessian_trace.json', required=False)
     parser.add_argument('--exp-name', type=str, default='', required=False)
     parser.add_argument('--network' , type=str, default='resnet_bottle', required=False)
     parser.add_argument('--depth', type=int, default=50, required=False)
@@ -379,7 +385,7 @@ if __name__ == '__main__':
     parser.add_argument('--re-init', type=bool, default=False, required=False)
     parser.add_argument('--use-patch', type=bool, default=False, required=False)
     
-    parser.add_argument('--hessian-batch-size', type=int, default=512)
+    parser.add_argument('--hessian-batch-size', type=int, default=64)
     parser.add_argument('--hessian-mode', type=str, default='trace', required=False)
     parser.add_argument('--use-decompose', type=int, default=0)
     parser.add_argument('--nv', type=int, default=3)
@@ -387,14 +393,14 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=8, required=False)
     parser.add_argument("--data_distributed",type=int, default=0)
     parser.add_argument("--gpu",type=str, default="0,1")
-    parser.add_argument("--init-test",type=int, default=0)
+    parser.add_argument("--init-test",type=int, default=1)
 
     args = parser.parse_args()
 
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
 
-    print('Using config!')
+    #print('Using config!')
     config = process_config(args.config)
 
     if args.dataset == "imagenet":
@@ -413,7 +419,7 @@ if __name__ == '__main__':
     config.fisher_type          = args.fisher_type
     config.fix_layers           = args.fix_layers
 
-    config.load_checkpoint      = "../HAPresults/checkpoint/pretrain/"
+    config.load_checkpoint      = f"../HAPresults/{args.dataset}_result/{args.network}{args.depth}/"
     config.load_checkpoint      += f"{args.dataset}_{args.network}{args.depth}_best.t7"
     config.checkpoint           =  f"../HAPresults/{args.dataset}_result/{args.network}{args.depth}/"
     config.checkpoint           += f"pr_{args.ratio}_nir_{args.ni_ratio}/"
