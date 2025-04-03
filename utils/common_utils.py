@@ -6,6 +6,7 @@ import logging
 import torch
 
 from pprint import pprint
+from pathlib import Path
 from easydict import EasyDict as edict
 
 
@@ -13,7 +14,7 @@ def get_logger(name, logpath, filepath, package_files=[],
                displaying=True, saving=True):
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
-    log_path = logpath + name
+    log_path = Path(logpath, name)
     makedirs(log_path)
     if saving:
         info_file_handler = logging.FileHandler(log_path)

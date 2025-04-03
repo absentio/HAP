@@ -421,9 +421,10 @@ if __name__ == '__main__':
 
     config.load_checkpoint      = f"../HAPresults/{args.dataset}_result/{args.network}{args.depth}/"
     config.load_checkpoint      += f"{args.dataset}_{args.network}{args.depth}_best.t7"
+    config.load_checkpoint = Path(config.load_checkpoint)
     config.checkpoint           =  f"../HAPresults/{args.dataset}_result/{args.network}{args.depth}/"
     config.checkpoint           += f"pr_{args.ratio}_nir_{args.ni_ratio}/"
-
+    config.checkpoint = Path(config.checkpoint)
     config.pruner               = args.pruner
     config.prune_mode           = args.prune_mode
     config.prune_ratio_limit    = args.prune_ratio_limit
