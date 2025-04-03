@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 from models.resnet_imagenet import BottleneckResNetImagenet
-running_time = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
+running_time = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
 
 from models import VGG
 from pruner.hessian_pruner import HessianPruner
