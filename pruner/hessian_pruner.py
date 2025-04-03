@@ -1,3 +1,4 @@
+from pathlib import Path
 import torch
 import torch.nn as nn
 from collections import OrderedDict
@@ -15,7 +16,6 @@ from tqdm import tqdm
 
 from .hessian_fact import get_trace_hut
 from pyhessian import hessian
-from pyhessian import group_product, group_add, normalization, get_params_grad, hessian_vector_product, orthnormal
 
 import numpy as np
 import time
@@ -68,6 +68,7 @@ class HessianPruner:
             self._inversed = False
             self._cfgs = {}
             self._indices = {}
+            print(self.model)
 
         def make_pruned_model(self, dataloader, criterion, device, fisher_type, prune_ratio, is_loader=False, normalize=True, re_init=False, n_v=300):
             self.prune_ratio = prune_ratio # use for some special case, particularly slq_full, slq_layer
@@ -112,14 +113,15 @@ class HessianPruner:
                     else:
                         m.requires_grad = False
 
-                trace_dir = f"../HAPresults/{self.config.dataset}_result/{self.config.network}{self.config.depth}/tract.npy"
+                trace_dir = Path(f"../HAPresults/{self.config.dataset}_result/{self.config.network}{self.config.depth}/tract.npy)")
                 print(trace_dir)
                 if os.path.exists(trace_dir):
                     print(f"Loading trace from {trace_dir}")
                     results = np.load(trace_dir, allow_pickle=True)
                 else:
                     results = get_trace_hut(self.model, dataloader, criterion, n_v=n_v, loader=is_loader, channelwise=True, layerwise=False)
-                    np.save(trace_dir, results)
+                    a = np.array(results, dtype=object)
+                    np.save(trace_dir, a)
 
 
                 for m in self.model.parameters():
@@ -408,32 +410,33 @@ class HessianPruner:
             return best_test_loss, best_test_acc
 
         def test_model(self, dataloader, criterion, device='cuda'):
-            self.model = self.model.eval()
-            self.model = self.model.cpu()
-            self.model = self.model.to(device)
-            correct = 0
-            top_1_correct = 0
-            top_5_correct = 0
-            total = 0
-            all_loss = 0
-            desc = ('Loss: %.3f | Acc: %.3f%% (%d/%d)' % (0, 0, correct, total))
-            prog_bar = tqdm(enumerate(dataloader), total=len(dataloader), desc=desc, leave=True)
-            for batch_idx, (inputs, targets) in prog_bar:
-                inputs, targets = inputs.to(device), targets.to(device)
-                outputs = self.model(inputs)
-                loss = criterion(outputs, targets)
-                all_loss += loss.item()
+            with torch.no_grad():
+                self.model = self.model.eval()
+                self.model = self.model.cpu()
+                self.model = self.model.to(device)
+                correct = 0
+                top_1_correct = 0
+                top_5_correct = 0
+                total = 0
+                all_loss = 0
+                desc = ('Loss: %.3f | Acc: %.3f%% (%d/%d)' % (0, 0, correct, total))
+                prog_bar = tqdm(enumerate(dataloader), total=len(dataloader), desc=desc, leave=True)
+                for batch_idx, (inputs, targets) in prog_bar:
+                    inputs, targets = inputs.to(device), targets.to(device)
+                    outputs = self.model(inputs)
+                    loss = criterion(outputs, targets)
+                    all_loss += loss.item()
 
-                total += targets.size(0)
-                _, pred = outputs.topk(5, 1, True, True)
-                pred = pred.t()
-                correct = pred.eq(targets.view(1, -1).expand_as(pred))
-                top_1_correct += correct[:1].contiguous().view(-1).float().sum(0)
-                top_5_correct += correct[:5].contiguous().view(-1).float().sum(0)
-                desc = ('Loss: %.3f | Top1: %.3f%% | Top5: %.3f%% ' %
-                        (all_loss / (batch_idx + 1), 100. * top_1_correct / total, 100. * top_5_correct / total))
+                    total += targets.size(0)
+                    _, pred = outputs.topk(5, 1, True, True)
+                    pred = pred.t()
+                    correct = pred.eq(targets.view(1, -1).expand_as(pred))
+                    top_1_correct += correct[:1].contiguous().view(-1).float().sum(0)
+                    top_5_correct += correct[:5].contiguous().view(-1).float().sum(0)
+                    desc = ('Loss: %.3f | Top1: %.3f%% | Top5: %.3f%% ' %
+                            (all_loss / (batch_idx + 1), 100. * top_1_correct / total, 100. * top_5_correct / total))
 
-                prog_bar.set_description(desc, refresh=True)
+                    prog_bar.set_description(desc, refresh=True)
             return all_loss / (batch_idx + 1), 100. * float(top_1_correct / total), 100. * float(top_5_correct / total)
 
         def speed_model(self, dataloader, criterion, device='cuda'):
